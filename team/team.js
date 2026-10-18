@@ -7,7 +7,7 @@ const COLLAPSED_KEY = 'team-collapsed-groups';
 const IMPORTED_KEY = 'team-imported-local';
 const STATUS_LABELS = { todo: '진행 전', doing: '진행 중', done: '완료' };
 
-// 공유 저장소가 받아 주는 파일 형식 (확장자 → 형식)
+// 공유 저장소가 그대로 받아 주는 파일 형식 (확장자 → 형식). 이 파일들은 새 탭에서 바로 열림
 const FILE_TYPES = {
   pdf: 'application/pdf',
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
@@ -15,6 +15,16 @@ const FILE_TYPES = {
   txt: 'text/plain', csv: 'text/csv', md: 'text/markdown', json: 'application/json',
 };
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+// 그 밖의 파일(한글, 워드, 엑셀, PPT, zip 등)은 글자(base64)로 바꿔 텍스트 파일로 보관하고,
+// 내려받을 때 원래 파일로 되돌림. 글자로 바꾸면 크기가 약 4/3배가 되어 원본은 15MB까지
+const MAX_PACKED_BYTES = 15 * 1024 * 1024;
+
+// 내려받기 창이 바로 저장해 주는 형식. 나머지(hwp, doc, xls, ppt 등)는 zip으로 감싸서 내려받음
+const DIRECT_SAVE = new Set([
+  'gif', 'png', 'jpg', 'jpeg', 'webp', 'mp4', 'webm', 'txt', 'json', 'md',
+  'docx', 'pptx', 'epub', 'csv', 'pdf', 'xlsx', 'zip',
+]);
 
 const form = document.getElementById('todo-form');
 const input = document.getElementById('todo-input');
@@ -731,13 +741,22 @@ function updateDetail() {
     icon.className = 'file-icon';
     icon.textContent = att.kind === 'link' ? '🔗' : '📄';
 
-    const a = document.createElement('a');
+    let a;
+    if (att.packed) {
+      // 글자로 바꿔 보관한 파일: 눌러서 원래 파일로 내려받음
+      a = document.createElement('button');
+      a.type = 'button';
+      a.title = '내려받기';
+      a.addEventListener('click', () => downloadPacked(att, a));
+    } else {
+      a = document.createElement('a');
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.href = att.kind === 'link' ? safeUrl(att.url) : `/_blob/${att.asset}`;
+      a.title = att.kind === 'link' ? att.url : '새 탭에서 열기';
+    }
     a.className = 'file-name';
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
     a.textContent = att.name;
-    a.href = att.kind === 'link' ? safeUrl(att.url) : `/_blob/${att.asset}`;
-    a.title = att.kind === 'link' ? att.url : '새 탭에서 열기';
 
     const info = document.createElement('span');
     info.className = 'file-info';
@@ -808,18 +827,22 @@ detailFileInput.addEventListener('change', async () => {
   for (const file of picked) {
     const ext = (file.name.split('.').pop() || '').toLowerCase();
     const type = FILE_TYPES[ext];
-    if (!type) {
-      detailFileError.textContent = `'${file.name}'은(는) 올릴 수 없는 형식이에요. 한글·워드·엑셀·PPT 파일은 PDF로 저장해서 올리거나, 공유 드라이브 주소를 '링크 추가'로 붙여 주세요.`;
+    const packed = !type;
+    const limit = packed ? MAX_PACKED_BYTES : MAX_FILE_BYTES;
+    if (file.size > limit) {
+      detailFileError.textContent = `'${file.name}'이(가) ${limit / 1024 / 1024}MB보다 커요. 크기를 줄이거나 공유 드라이브 주소를 링크로 추가해 주세요.`;
       continue;
     }
-    if (file.size > MAX_FILE_BYTES) {
-      detailFileError.textContent = `'${file.name}'이(가) 20MB보다 커요. 크기를 줄이거나 링크로 추가해 주세요.`;
+    if (!file.size) {
+      detailFileError.textContent = `'${file.name}'은(는) 빈 파일이라 올릴 수 없어요.`;
       continue;
     }
     try {
-      const res = await assets.upload(file, { type });
+      const res = packed
+        ? await assets.upload(new Blob([await toBase64(file)], { type: 'text/plain' }), { type: 'text/plain' })
+        : await assets.upload(file, { type });
       await db.collection('attachments').doc().set({
-        todoId, kind: 'file', asset: res.id, name: file.name, size: res.sizeBytes,
+        todoId, kind: 'file', asset: res.id, name: file.name, size: file.size, packed,
         addedAt: Date.now(), by: myId,
       });
       patch(todoId, {});
@@ -830,9 +853,115 @@ detailFileInput.addEventListener('change', async () => {
   uploadLabel.classList.remove('busy');
 });
 
+// 파일 → base64 글자
+function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+// base64 글자 → 원래 파일 내용
+function fromBase64(text) {
+  const bin = atob(text.trim());
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function downloadPacked(att, button) {
+  detailFileError.textContent = '';
+  const downloads = window.claude ? await window.claude.use('downloads') : null;
+  if (!downloads) {
+    detailFileError.textContent = '이 화면에서는 내려받을 수 없어요. claude.ai에서 링크를 열어 주세요.';
+    return;
+  }
+  button.disabled = true;
+  try {
+    const res = await fetch(`/_blob/${att.asset}`);
+    if (!res.ok) throw new Error('missing');
+    const bytes = fromBase64(await res.text());
+    const ext = (att.name.split('.').pop() || '').toLowerCase();
+    const direct = DIRECT_SAVE.has(ext);
+    await downloads.save(direct
+      ? { filename: att.name, data: new Blob([bytes]) }
+      : { filename: `${att.name}.zip`, data: makeZip(att.name, bytes) });
+    if (!direct) detailFileError.textContent = `'${att.name}'은(는) zip 파일로 저장돼요. 압축을 풀면 원래 파일이 나와요.`;
+  } catch (err) {
+    const code = err && err.code;
+    if (code === 'declined') {
+      // 내려받기 창에서 취소함
+    } else if (code === 'rate_limited') {
+      detailFileError.textContent = '잠시 후 다시 눌러 주세요.';
+    } else {
+      detailFileError.textContent = `'${att.name}'을(를) 내려받지 못했어요. 잠시 후 다시 시도해 주세요.`;
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// 파일 하나를 압축 없이 담은 zip 만들기 (한글 파일 이름 지원)
+function makeZip(name, bytes) {
+  const nameBytes = new TextEncoder().encode(name);
+  const crc = crc32(bytes);
+  const now = new Date();
+  const time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+
+  const local = new DataView(new ArrayBuffer(30));
+  local.setUint32(0, 0x04034b50, true);
+  local.setUint16(4, 20, true);
+  local.setUint16(6, 0x0800, true); // 파일 이름이 UTF-8
+  local.setUint16(10, time, true);
+  local.setUint16(12, date, true);
+  local.setUint32(14, crc, true);
+  local.setUint32(18, bytes.length, true);
+  local.setUint32(22, bytes.length, true);
+  local.setUint16(26, nameBytes.length, true);
+
+  const central = new DataView(new ArrayBuffer(46));
+  central.setUint32(0, 0x02014b50, true);
+  central.setUint16(4, 20, true);
+  central.setUint16(6, 20, true);
+  central.setUint16(8, 0x0800, true);
+  central.setUint16(12, time, true);
+  central.setUint16(14, date, true);
+  central.setUint32(16, crc, true);
+  central.setUint32(20, bytes.length, true);
+  central.setUint32(24, bytes.length, true);
+  central.setUint16(28, nameBytes.length, true);
+
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, 1, true);
+  end.setUint16(10, 1, true);
+  end.setUint32(12, 46 + nameBytes.length, true);
+  end.setUint32(16, 30 + nameBytes.length + bytes.length, true);
+
+  return new Blob([local, nameBytes, bytes, central, nameBytes, end], { type: 'application/zip' });
+}
+
+let crcTable = null;
+function crc32(bytes) {
+  if (!crcTable) {
+    crcTable = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      crcTable[i] = c >>> 0;
+    }
+  }
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) crc = crcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
 function uploadErrorMessage(name, code) {
   if (code === 'invalid_request') return `'${name}'을(를) 올리지 못했어요. txt·csv 파일은 UTF-8로 저장된 파일만 올릴 수 있어요.`;
-  if (code === 'too_large') return `'${name}'이(가) 너무 커요. 20MB 이하로 줄여 주세요.`;
+  if (code === 'too_large') return `'${name}'이(가) 너무 커요. 크기를 줄이거나 링크로 추가해 주세요.`;
   if (code === 'unsupported_type') return `'${name}'은(는) 올릴 수 없는 형식이에요.`;
   if (code === 'quota_or_state') return '공유 저장 공간이 가득 찼어요. 필요 없는 첨부를 지운 뒤 다시 시도해 주세요.';
   if (code === 'rate_limited') return '잠시 후 다시 올려 주세요.';

@@ -69,14 +69,14 @@
         <div class="attach-actions write-only">
           <label class="upload-button" id="upload-label">
             파일 올리기
-            <input type="file" id="detail-file-input" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.txt,.csv,.md,.json">
+            <input type="file" id="detail-file-input" multiple>
           </label>
           <form id="link-form" class="link-form">
             <input id="link-url" type="url" placeholder="링크 주소 (예: 구글 드라이브 문서)" required>
             <input id="link-name" type="text" placeholder="이름 (선택)" maxlength="100">
             <button type="submit">링크 추가</button>
           </form>
-          <p class="detail-hint">올릴 수 있는 파일: PDF, 이미지, 동영상(mp4), txt·csv (20MB까지). 한글·워드·엑셀·PPT는 PDF로 저장해 올리거나 공유 드라이브 주소를 링크로 추가하세요.</p>
+          <p class="detail-hint">모든 파일을 올릴 수 있어요. PDF·이미지·동영상은 20MB, 한글·워드·엑셀·PPT 등 그 밖의 파일은 15MB까지예요. 더 큰 파일은 공유 드라이브 주소를 링크로 추가하세요.</p>
         </div>
         <p id="detail-file-error" class="detail-error" role="alert"></p>
       </section>
