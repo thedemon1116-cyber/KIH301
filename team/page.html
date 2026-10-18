@@ -1,0 +1,84 @@
+  <main class="app">
+    <h1>팀 할 일 목록</h1>
+    <p id="banner" class="banner" role="status" hidden></p>
+
+    <div id="import-box" class="import-box" hidden>
+      <p id="import-text"></p>
+      <div class="import-actions">
+        <button type="button" id="import-button" class="primary-small">공유 목록으로 옮기기</button>
+        <button type="button" id="import-dismiss">옮기지 않기</button>
+      </div>
+    </div>
+
+    <form id="todo-form" class="todo-form write-only">
+      <div class="group-inputs">
+        <input id="dept-input" type="text" list="dept-options" placeholder="실 (예: 회원관리)" autocomplete="off" maxlength="40" title="상위 그룹 (선택)">
+        <span class="sep" aria-hidden="true">›</span>
+        <input id="team-input" type="text" list="team-options" placeholder="팀 (예: 이용율 관리)" autocomplete="off" maxlength="40" title="하위 그룹 (선택, 실을 먼저 입력)" disabled>
+      </div>
+      <datalist id="dept-options"></datalist>
+      <datalist id="team-options"></datalist>
+      <input id="todo-input" type="text" placeholder="할 일을 입력하세요" autocomplete="off" maxlength="200" required>
+      <input id="due-input" type="date" title="마감일 (선택)">
+      <button type="submit">추가</button>
+    </form>
+
+    <div class="filters" role="tablist">
+      <button type="button" data-filter="all" class="active">전체</button>
+      <button type="button" data-filter="todo">진행 전</button>
+      <button type="button" data-filter="doing">진행 중</button>
+      <button type="button" data-filter="done">완료</button>
+      <button type="button" data-filter="important">★ 중요</button>
+    </div>
+
+    <div id="todo-list" class="todo-list"></div>
+    <p id="empty" class="empty"></p>
+
+    <footer class="footer">
+      <span id="count"></span>
+      <button type="button" id="clear-done">완료 항목 지우기</button>
+    </footer>
+
+    <p class="hint">팀원 모두가 같은 목록을 보고, 고친 내용은 바로 서로의 화면에 반영돼요.<br>작성하기: 상세 내용·자료 올리기 · 더블클릭: 제목 수정 · ⠿ 끌기: 순서 변경 · 그룹 제목 클릭: 접기/펼치기</p>
+  </main>
+
+  <dialog id="detail" class="detail" aria-labelledby="detail-title">
+    <div class="detail-inner">
+      <header class="detail-head">
+        <div class="detail-heading">
+          <p id="detail-path" class="detail-path"></p>
+          <h2 id="detail-title"></h2>
+        </div>
+        <button type="button" id="detail-close" class="detail-close" title="닫기">×</button>
+      </header>
+
+      <div class="detail-state">
+        <span id="detail-status" class="status"></span>
+        <label class="detail-done"><input type="checkbox" id="detail-done"> 완료로 표시</label>
+      </div>
+
+      <section class="detail-section">
+        <label for="detail-notes" class="section-label">상세 내용</label>
+        <textarea id="detail-notes" rows="8" placeholder="진행 상황, 메모, 참고 링크 등을 자유롭게 적어 보세요. 팀원 모두가 함께 봐요."></textarea>
+        <p id="detail-saved" class="detail-saved"></p>
+      </section>
+
+      <section class="detail-section">
+        <span class="section-label">최종 자료</span>
+        <ul id="detail-files" class="detail-files"></ul>
+        <div class="attach-actions write-only">
+          <label class="upload-button" id="upload-label">
+            파일 올리기
+            <input type="file" id="detail-file-input" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.txt,.csv,.md,.json">
+          </label>
+          <form id="link-form" class="link-form">
+            <input id="link-url" type="url" placeholder="링크 주소 (예: 구글 드라이브 문서)" required>
+            <input id="link-name" type="text" placeholder="이름 (선택)" maxlength="100">
+            <button type="submit">링크 추가</button>
+          </form>
+          <p class="detail-hint">올릴 수 있는 파일: PDF, 이미지, 동영상(mp4), txt·csv (20MB까지). 한글·워드·엑셀·PPT는 PDF로 저장해 올리거나 공유 드라이브 주소를 링크로 추가하세요.</p>
+        </div>
+        <p id="detail-file-error" class="detail-error" role="alert"></p>
+      </section>
+    </div>
+  </dialog>

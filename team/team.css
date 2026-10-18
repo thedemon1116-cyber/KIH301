@@ -1,0 +1,82 @@
+[hidden] { display: none !important; }
+
+/* 팀 공유판에만 있는 요소 */
+.banner {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--doing-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.import-box {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px dashed var(--primary);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.import-box p { margin: 0; }
+.import-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.import-actions button { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); }
+.import-actions .primary-small { background: var(--primary); color: var(--primary-text); border-color: transparent; font-weight: 600; }
+
+/* 보기 전용 */
+body.readonly .write-only { display: none !important; }
+.todo-list button:disabled { cursor: default; }
+.todo-list .due:disabled { opacity: 1; }
+
+/* 지우기 확인 */
+.confirm-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 6px 0;
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  list-style: none;
+}
+
+.confirm-bar span { flex: 1 1 200px; }
+.confirm-bar button { padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border); }
+.confirm-bar .confirm-yes { background: var(--danger); color: var(--card); border-color: transparent; font-weight: 600; }
+
+/* 첨부 */
+.file-icon { flex-shrink: 0; }
+a.file-name { text-decoration: none; }
+a.file-name:hover { text-decoration: underline; }
+
+.attach-actions { display: flex; flex-direction: column; gap: 10px; }
+.upload-button.busy { opacity: 0.6; pointer-events: none; }
+.upload-button.busy::after { content: " (올리는 중…)"; }
+
+.link-form { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.link-form input {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+}
+
+.link-form input:focus { border-color: var(--primary); }
+.link-form button { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--primary); color: var(--primary); font-weight: 600; font-size: 0.9rem; }
+.detail-hint { margin: 0; font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
+
+@media (max-width: 480px) {
+  .file-info { display: inline; font-size: 0.7rem; white-space: normal; text-align: right; }
+}
