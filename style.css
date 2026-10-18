@@ -7,6 +7,8 @@
   --primary: #3b82f6;
   --primary-text: #ffffff;
   --danger: #ef4444;
+  --warn: #d97706;
+  --star: #f59e0b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -19,6 +21,8 @@
     --primary: #60a5fa;
     --primary-text: #0f172a;
     --danger: #f87171;
+    --warn: #fbbf24;
+    --star: #fbbf24;
   }
 }
 
@@ -79,7 +83,7 @@ button {
   font-weight: 600;
 }
 
-.filters { display: flex; gap: 6px; margin: 18px 0 8px; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 8px; }
 
 .filters button {
   padding: 6px 12px;
@@ -147,3 +151,80 @@ button {
 .footer button:hover { color: var(--danger); }
 
 .hint { margin: 16px 0 0; font-size: 0.8rem; color: var(--muted); text-align: center; }
+
+/* 마감일 입력 */
+.todo-form { flex-wrap: wrap; }
+
+.todo-form input[type="date"] {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+/* 드래그 손잡이 */
+.todo-list .handle {
+  color: var(--muted);
+  cursor: grab;
+  padding: 4px 2px;
+  touch-action: none;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.todo-list li.dragging {
+  opacity: 0.5;
+  background: var(--bg);
+}
+
+body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select: none; }
+
+/* 중요 표시 */
+.todo-list .star {
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--muted);
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+.todo-list li.important .star { color: var(--star); }
+.todo-list li.important { box-shadow: inset 3px 0 0 var(--star); }
+
+/* 마감일 배지 */
+.todo-list .due {
+  font-size: 0.8rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.todo-list .due.empty-due { opacity: 0; }
+.todo-list li:hover .due.empty-due,
+.todo-list .due.empty-due:focus { opacity: 1; }
+.todo-list .due.today { border-color: var(--warn); color: var(--warn); font-weight: 600; }
+.todo-list .due.overdue { border-color: var(--danger); color: var(--danger); font-weight: 600; }
+.todo-list li.done .due { color: var(--muted); border-color: var(--border); font-weight: normal; }
+
+.todo-list .due-edit {
+  font-size: 0.8rem;
+  padding: 2px 4px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+}
+
+@media (hover: none) {
+  .todo-list .due.empty-due { opacity: 1; }
+}
+
+/* 좁은 화면(휴대폰)에서는 입력칸을 한 줄 전체로 */
+@media (max-width: 480px) {
+  body { padding: 16px; }
+  .app { padding: 18px 14px; }
+  .todo-form input[type="text"] { flex-basis: 100%; }
+  .todo-form input[type="date"] { flex: 1; }
+  .todo-list li { gap: 6px; }
+}
