@@ -9,6 +9,7 @@
   --danger: #ef4444;
   --warn: #d97706;
   --star: #f59e0b;
+  --group-bg: #eef3fd;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,6 +24,7 @@
     --danger: #f87171;
     --warn: #fbbf24;
     --star: #fbbf24;
+    --group-bg: #243349;
   }
 }
 
@@ -38,7 +40,7 @@ body {
 }
 
 .app {
-  max-width: 520px;
+  max-width: 600px;
   margin: 0 auto;
   background: var(--card);
   border: 1px solid var(--border);
@@ -118,7 +120,9 @@ button {
 
 .todo-list .text {
   flex: 1;
-  word-break: break-word;
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   cursor: text;
 }
 
@@ -224,7 +228,105 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 @media (max-width: 480px) {
   body { padding: 16px; }
   .app { padding: 18px 14px; }
-  .todo-form input[type="text"] { flex-basis: 100%; }
+  #todo-input { flex-basis: 100%; }
   .todo-form input[type="date"] { flex: 1; }
   .todo-list li { gap: 6px; }
+}
+
+/* 실 › 팀 입력칸 */
+.group-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.group-inputs .sep { color: var(--muted); }
+.todo-form input:disabled { opacity: 0.5; }
+
+/* 그룹(실/팀) */
+.todo-list ul { list-style: none; margin: 0; padding: 0; }
+
+.group { margin-top: 10px; }
+.group.lv2 { margin-left: 18px; margin-top: 6px; }
+
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 10px;
+}
+
+.group.lv1 > .group-head { background: var(--group-bg); }
+.group.lv2 > .group-head { border-bottom: 1px dashed var(--border); border-radius: 0; }
+
+.group-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.group.lv1 .group-toggle { font-weight: 700; }
+.group.lv2 .group-toggle { font-weight: 600; font-size: 0.95rem; }
+
+.group-toggle .caret {
+  display: inline-block;
+  width: 1em;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.group.collapsed > .group-head .caret { transform: rotate(-90deg); }
+.group.collapsed > .group-body { display: none; }
+
+.group-toggle .name { word-break: keep-all; overflow-wrap: anywhere; }
+
+.group-toggle .tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.group-toggle .group-count {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: normal;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.group-action {
+  color: var(--muted);
+  padding: 6px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.group-action:hover { color: var(--primary); }
+
+.group-head .rename-input {
+  flex: 1;
+  min-width: 0;
+  margin: 4px 6px;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+}
+
+.group-body { padding-left: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .group-toggle .caret { transition: none; }
 }

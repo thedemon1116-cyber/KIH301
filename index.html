@@ -11,6 +11,13 @@
     <h1>할 일 목록</h1>
 
     <form id="todo-form" class="todo-form">
+      <div class="group-inputs">
+        <input id="dept-input" type="text" list="dept-options" placeholder="실 (예: 회원관리)" autocomplete="off" maxlength="40" title="상위 그룹 (선택)">
+        <span class="sep" aria-hidden="true">›</span>
+        <input id="team-input" type="text" list="team-options" placeholder="팀 (예: 이용율 관리)" autocomplete="off" maxlength="40" title="하위 그룹 (선택, 실을 먼저 입력)" disabled>
+      </div>
+      <datalist id="dept-options"></datalist>
+      <datalist id="team-options"></datalist>
       <input id="todo-input" type="text" placeholder="할 일을 입력하세요" autocomplete="off" maxlength="200" required>
       <input id="due-input" type="date" title="마감일 (선택)">
       <button type="submit">추가</button>
@@ -23,7 +30,7 @@
       <button type="button" data-filter="important">★ 중요</button>
     </div>
 
-    <ul id="todo-list" class="todo-list"></ul>
+    <div id="todo-list" class="todo-list"></div>
     <p id="empty" class="empty">할 일이 없어요. 위에서 추가해 보세요!</p>
 
     <footer class="footer">
@@ -31,7 +38,7 @@
       <button type="button" id="clear-done">완료 항목 지우기</button>
     </footer>
 
-    <p class="hint">더블클릭: 내용 수정 · 날짜 클릭: 마감일 변경 · ⠿ 끌기: 순서 변경</p>
+    <p class="hint">더블클릭: 내용 수정 · 날짜 클릭: 마감일 변경 · ⠿ 끌기: 순서 변경<br>그룹 제목 클릭: 접기/펼치기 · ＋: 그 그룹에 할 일 추가 · ✎: 그룹 이름 바꾸기</p>
   </main>
 
   <script src="app.js"></script>
