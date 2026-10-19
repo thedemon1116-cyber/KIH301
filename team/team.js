@@ -7,6 +7,10 @@ const COLLAPSED_KEY = 'team-collapsed-groups';
 const IMPORTED_KEY = 'team-imported-local';
 const STATUS_LABELS = { todo: '진행 전', doing: '진행 중', done: '완료' };
 
+// 그룹 단계: C레벨 아젠다 › 실 › 팀
+const LEVELS = ['agenda', 'dept', 'team'];
+const LEVEL_TAGS = ['아젠다', '실', '팀'];
+
 // 공유 저장소가 그대로 받아 주는 파일 형식 (확장자 → 형식). 이 파일들은 새 탭에서 바로 열림
 const FILE_TYPES = {
   pdf: 'application/pdf',
@@ -29,6 +33,8 @@ const DIRECT_SAVE = new Set([
 const form = document.getElementById('todo-form');
 const input = document.getElementById('todo-input');
 const dueInput = document.getElementById('due-input');
+const agendaInput = document.getElementById('agenda-input');
+const agendaOptions = document.getElementById('agenda-options');
 const deptInput = document.getElementById('dept-input');
 const teamInput = document.getElementById('team-input');
 const deptOptions = document.getElementById('dept-options');
@@ -59,6 +65,8 @@ const detailClose = document.getElementById('detail-close');
 const linkForm = document.getElementById('link-form');
 const linkUrl = document.getElementById('link-url');
 const linkName = document.getElementById('link-name');
+const assigneeInput = document.getElementById('assignee-input');
+const detailAssignee = document.getElementById('detail-assignee');
 
 let db = null;
 let assets = null;
@@ -95,6 +103,7 @@ async function init() {
   [user, assets] = await Promise.all([window.claude.use('user'), window.claude.use('assets')]);
   if (user) {
     myId = await user.id();
+    names[myId] = (await user.name()) || '';
     if ((await user.can('data.write')) === false) {
       setReadOnly(true);
       showBanner('보기 전용으로 열려 있어요. 함께 편집하려면 공유한 사람에게 편집 권한을 요청하세요.');
@@ -121,7 +130,7 @@ async function init() {
 
 function normalize(id, data) {
   return {
-    id, dept: '', team: '', text: '', done: false, due: '', important: false, notes: '',
+    id, agenda: '', dept: '', team: '', assignee: null, assigneeName: '', text: '', done: false, due: '', important: false, notes: '',
     order: 0, createdAt: 0, updatedAt: 0, updatedBy: null, ...data,
   };
 }
@@ -226,14 +235,140 @@ function nameOf(id) {
   return names[id] || '팀원';
 }
 
+const loadingNames = new Set();
+
 async function loadNames(ids) {
   if (!user) return;
-  const missing = [...new Set(ids.filter(id => id && id !== myId && !(id in names)))];
+  const missing = [...new Set(ids.filter(id => id && id !== myId && !(id in names) && !loadingNames.has(id)))];
   if (!missing.length) return;
+  missing.forEach(id => loadingNames.add(id));
   const found = await user.profiles(missing);
-  for (const id of missing) names[id] = (found[id] && found[id].name) || '팀원';
+  for (const id of missing) {
+    names[id] = (found[id] && found[id].name) || '팀원';
+    loadingNames.delete(id);
+  }
+  render();
   updateDetail();
 }
+
+// ───────── 담당자 ─────────
+// 담당자는 사람 id(assignee)로 저장하고, 목록에 없는 사람은 이름만(assigneeName) 적어 둘 수 있음
+
+function assigneeLabel(todo) {
+  if (todo.assignee) return nameOf(todo.assignee) || '팀원';
+  return todo.assigneeName || '';
+}
+
+// 담당자로 고를 수 있는 사람: 나 + 이 목록에 한 번이라도 등장한 사람 (+ 검색 결과)
+function knownPeople() {
+  const ids = new Set();
+  if (myId) ids.add(myId);
+  for (const t of todos) [t.createdBy, t.updatedBy, t.assignee].forEach(id => id && ids.add(id));
+  for (const a of attachments) if (a.by) ids.add(a.by);
+  return [...ids];
+}
+
+// 담당자 고르기 입력칸: 입력하면 아래에 후보가 뜨고, 고르면 onPick({ assignee, assigneeName })을 부름
+function attachPicker(field, onPick, onBlur) {
+  const wrap = document.createElement('span');
+  wrap.className = 'picker';
+  field.replaceWith(wrap);
+  wrap.appendChild(field);
+  const menu = document.createElement('ul');
+  menu.className = 'picker-menu';
+  menu.hidden = true;
+  wrap.appendChild(menu);
+
+  let searchSeq = 0;
+
+  async function refresh() {
+    const q = field.value.trim();
+    const seq = ++searchSeq;
+    const ids = knownPeople();
+    await loadNames(ids);
+    let found = [];
+    if (user) found = await user.search(q).catch(() => []);
+    if (seq !== searchSeq) return; // 더 최근 입력이 있으면 버림
+
+    const options = [];
+    const seen = new Set();
+    const addPerson = (id, name) => {
+      if (!id || seen.has(id)) return;
+      if (q && !name.toLowerCase().includes(q.toLowerCase())) return;
+      seen.add(id);
+      options.push({ label: id === myId ? `${name} (나)` : name, value: { assignee: id, assigneeName: '' } });
+    };
+    for (const id of ids) addPerson(id, id === myId ? (names[myId] || '나') : nameOf(id));
+    for (const hit of found) { names[hit.id] = hit.name; addPerson(hit.id, hit.name); }
+    if (q && !options.some(o => o.label === q)) {
+      options.push({ label: `'${q}' 이름으로 지정`, value: { assignee: null, assigneeName: q }, extra: true });
+    }
+    options.push({ label: '담당자 없음', value: { assignee: null, assigneeName: '' }, extra: true });
+
+    menu.innerHTML = '';
+    for (const option of options) {
+      const li = document.createElement('li');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = option.label;
+      if (option.extra) button.className = 'extra';
+      // blur보다 먼저 처리되도록 mousedown에서 고름
+      button.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        pick(option.value);
+      });
+      li.appendChild(button);
+      menu.appendChild(li);
+    }
+    menu.hidden = document.activeElement !== field;
+  }
+
+  function pick(value) {
+    menu.hidden = true;
+    onPick(value);
+    field.blur();
+  }
+
+  field.addEventListener('focus', refresh);
+  field.addEventListener('input', refresh);
+  field.addEventListener('blur', () => { menu.hidden = true; if (onBlur) onBlur(); });
+  field.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { menu.hidden = true; field.blur(); }
+    if (e.key === 'Enter') {
+      // 맨 위 후보를 고름
+      e.preventDefault();
+      const first = menu.querySelector('button');
+      if (first) first.dispatchEvent(new MouseEvent('mousedown'));
+    }
+  });
+}
+
+// 새 할 일 입력칸의 담당자
+let newAssignee = { assignee: null, assigneeName: '' };
+
+attachPicker(assigneeInput, (value) => {
+  newAssignee = value;
+  assigneeInput.value = value.assignee ? (value.assignee === myId ? (names[myId] || '나') : nameOf(value.assignee)) : value.assigneeName;
+  newAssigneeLabel = assigneeInput.value;
+});
+let newAssigneeLabel = '';
+
+// 후보를 고르지 않고 이름만 적었으면 그 이름을 담당자로 씀
+function currentNewAssignee() {
+  const typed = assigneeInput.value.trim();
+  if (!typed) return { assignee: null, assigneeName: '' };
+  if (typed === newAssigneeLabel) return newAssignee;
+  return { assignee: null, assigneeName: typed };
+}
+
+// 작성하기 창의 담당자
+attachPicker(detailAssignee, (value) => {
+  if (!openId) return;
+  patch(openId, value);
+  const todo = openTodo();
+  if (todo) Object.assign(todo, value);
+  updateDetail();
+}, () => setTimeout(updateDetail, 0)); // 고르지 않고 나가면 원래 담당자로 되돌림
 
 // ───────── 목록 그리기 ─────────
 
@@ -244,35 +379,13 @@ function render() {
   const visible = todos.filter(todo => {
     if (filter === 'todo' || filter === 'doing' || filter === 'done') return statusOf(todo) === filter;
     if (filter === 'important') return todo.important;
+    if (filter === 'mine') return !!myId && todo.assignee === myId;
     return true;
   });
 
   list.innerHTML = '';
-
-  const depts = new Map();
-  const ungrouped = [];
-  for (const todo of visible) {
-    if (!todo.dept) { ungrouped.push(todo); continue; }
-    if (!depts.has(todo.dept)) depts.set(todo.dept, { direct: [], teams: new Map() });
-    const dept = depts.get(todo.dept);
-    if (!todo.team) { dept.direct.push(todo); continue; }
-    if (!dept.teams.has(todo.team)) dept.teams.set(todo.team, []);
-    dept.teams.get(todo.team).push(todo);
-  }
-
-  for (const [deptName, dept] of depts) {
-    const all = [...dept.direct, ...[...dept.teams.values()].flat()];
-    const body = createGroup(list, 1, deptName, '', all);
-    if (dept.direct.length) body.appendChild(createItemList(dept.direct));
-    for (const [teamName, items] of dept.teams) {
-      createGroup(body, 2, deptName, teamName, items).appendChild(createItemList(items));
-    }
-  }
-
-  if (ungrouped.length) {
-    const parent = depts.size ? createGroup(list, 1, '', '', ungrouped) : list;
-    parent.appendChild(createItemList(ungrouped));
-  }
+  renderLevel(list, visible, {}, 0);
+  loadNames(todos.map(t => t.assignee));
 
   const tally = { todo: 0, doing: 0, done: 0 };
   for (const todo of todos) tally[statusOf(todo)]++;
@@ -282,7 +395,7 @@ function render() {
     empty.textContent = '공유 목록을 불러오는 중…';
   } else if (!todos.length) {
     empty.textContent = canWrite
-      ? '아직 할 일이 없어요. 위에서 실(예: 회원관리)과 팀(예: 이용율 관리)을 적고 첫 할 일을 추가해 보세요.'
+      ? '아직 할 일이 없어요. 위에서 C레벨 아젠다, 실(예: 회원관리), 팀(예: 이용율 관리)을 적고 첫 할 일을 추가해 보세요.'
       : '아직 할 일이 없어요.';
   } else {
     empty.textContent = '이 조건에 맞는 할 일이 없어요.';
@@ -292,9 +405,54 @@ function render() {
   updateSuggestions();
 }
 
-function createGroup(parent, level, dept, team, items) {
-  const key = team ? `${dept}/${team}` : dept || '__none__';
-  const name = level === 2 ? team : dept || '그룹 없음';
+// items를 level 단계의 이름별로 묶어 그리고, 안쪽 단계도 차례로 그림
+// path에는 지금까지 지나온 상위 그룹 이름이 들어 있음 (예: { agenda: 'A', dept: '회원관리' })
+function renderLevel(parent, items, path, level) {
+  if (level === LEVELS.length) {
+    parent.appendChild(createItemList(items));
+    return;
+  }
+  const field = LEVELS[level];
+  const groups = new Map();
+  const direct = [];
+  for (const todo of items) {
+    if (!todo[field]) { direct.push(todo); continue; }
+    if (!groups.has(todo[field])) groups.set(todo[field], []);
+    groups.get(todo[field]).push(todo);
+  }
+
+  // 아젠다가 하나도 없으면 아젠다 단계는 건너뛰고 바로 실부터 보여줌
+  if (level === 0 && !groups.size) {
+    renderLevel(parent, items, path, 1);
+    return;
+  }
+
+  // 상위 그룹 안에 바로 속한 할 일(예: 실에는 속하지만 팀은 없는 일)은 맨 위에 보여줌
+  const insideNamedParent = level > 0 && path[LEVELS[level - 1]];
+  if (direct.length && insideNamedParent) parent.appendChild(createItemList(direct));
+
+  for (const [name, groupItems] of groups) {
+    const body = createGroup(parent, level, { ...path, [field]: name }, groupItems);
+    renderLevel(body, groupItems, { ...path, [field]: name }, level + 1);
+  }
+
+  if (direct.length && !insideNamedParent) {
+    if (!groups.size) {
+      renderLevel(parent, direct, path, level + 1);
+    } else {
+      const label = level === 0 ? '아젠다 미지정' : '그룹 없음';
+      const body = createGroup(parent, level, { ...path, [field]: '' }, direct, label);
+      renderLevel(body, direct, { ...path, [field]: '' }, level + 1);
+    }
+  }
+}
+
+// 그룹 상자 만들기. 안쪽(본문) 요소를 돌려줌
+// label이 있으면 이름 없는 묶음(아젠다 미지정, 그룹 없음)이라 추가/이름 바꾸기 버튼을 달지 않음
+function createGroup(parent, level, path, items, label) {
+  const field = LEVELS[level];
+  const key = LEVELS.slice(0, level + 1).map(f => `${f}:${path[f] || ''}`).join('/');
+  const name = label || path[field];
 
   const section = document.createElement('section');
   section.className = `group lv${level}`;
@@ -309,10 +467,10 @@ function createGroup(parent, level, dept, team, items) {
   toggle.setAttribute('aria-expanded', String(!collapsed.has(key)));
   const left = items.filter(t => !t.done).length;
   toggle.innerHTML = '<span class="caret">▾</span><span class="tag"></span><span class="name"></span><span class="group-count"></span>';
-  toggle.querySelector('.tag').textContent = level === 1 ? '실' : '팀';
+  toggle.querySelector('.tag').textContent = LEVEL_TAGS[level];
   toggle.querySelector('.name').textContent = name;
   toggle.querySelector('.group-count').textContent = `${left}/${items.length}`;
-  if (!dept) toggle.querySelector('.tag').remove();
+  if (label) toggle.querySelector('.tag').remove();
   toggle.addEventListener('click', () => {
     if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
     saveCollapsed();
@@ -320,15 +478,16 @@ function createGroup(parent, level, dept, team, items) {
   });
   head.appendChild(toggle);
 
-  if (dept && canWrite) {
+  if (!label && canWrite) {
     const add = document.createElement('button');
     add.type = 'button';
     add.className = 'group-action';
     add.title = `'${name}'에 할 일 추가`;
     add.textContent = '＋';
     add.addEventListener('click', () => {
-      deptInput.value = dept;
-      teamInput.value = team;
+      agendaInput.value = path.agenda || '';
+      deptInput.value = path.dept || '';
+      teamInput.value = path.team || '';
       syncTeamInput();
       input.focus();
     });
@@ -338,7 +497,7 @@ function createGroup(parent, level, dept, team, items) {
     rename.className = 'group-action';
     rename.title = '그룹 이름 바꾸기';
     rename.textContent = '✎';
-    rename.addEventListener('click', () => startRename(head, toggle, dept, team));
+    rename.addEventListener('click', () => startRename(head, toggle, level, path));
 
     head.append(add, rename);
   }
@@ -390,6 +549,21 @@ function createItem(todo) {
   pill.className = `status ${status}`;
   pill.textContent = STATUS_LABELS[status];
   meta.appendChild(pill);
+
+  const who = assigneeLabel(todo);
+  if (who || canWrite) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = who ? 'assignee' : 'assignee empty-due';
+    if (todo.assignee && todo.assignee === myId) chip.classList.add('me');
+    chip.title = '담당자 바꾸기';
+    chip.textContent = who ? `👤 ${todo.assignee === myId ? '나' : who}` : '+ 담당자';
+    chip.addEventListener('click', () => {
+      openDetail(todo.id);
+      if (canWrite) detailAssignee.focus();
+    });
+    meta.appendChild(chip);
+  }
 
   const { label, state } = describeDue(todo.due);
   if (state !== 'none' || canWrite) {
@@ -525,10 +699,14 @@ function startDueEdit(badge, todo) {
   edit.addEventListener('blur', () => finish(true));
 }
 
-function startRename(head, toggle, dept, team) {
+// 그룹 이름 바꾸기: 같은 상위 그룹 안에서 그 이름을 쓰는 모든 할 일에 반영
+// 이미 있는 이름으로 바꾸면 두 그룹이 합쳐짐
+function startRename(head, toggle, level, path) {
+  const field = LEVELS[level];
+  const oldName = path[field];
   const edit = document.createElement('input');
   edit.className = 'rename-input';
-  edit.value = team || dept;
+  edit.value = oldName;
   edit.maxLength = 40;
   head.replaceChild(edit, toggle);
   editing = true;
@@ -541,11 +719,12 @@ function startRename(head, toggle, dept, team) {
     finished = true;
     editing = false;
     const value = edit.value.trim();
-    if (commit && value && value !== (team || dept)) {
+    if (commit && value && value !== oldName) {
+      const parents = LEVELS.slice(0, level);
       for (const todo of todos) {
-        if (todo.dept !== dept) continue;
-        if (team && todo.team === team) patch(todo.id, { team: value });
-        if (!team) patch(todo.id, { dept: value });
+        if (todo[field] !== oldName) continue;
+        if (parents.some(f => (todo[f] || '') !== (path[f] || ''))) continue;
+        patch(todo.id, { [field]: value });
       }
     }
     render();
@@ -615,8 +794,13 @@ function moveBetweenNeighbours(li) {
 // ───────── 입력칸 ─────────
 
 function updateSuggestions() {
-  const depts = [...new Set(todos.map(t => t.dept).filter(Boolean))];
+  const agendas = [...new Set(todos.map(t => t.agenda).filter(Boolean))];
+  const agenda = agendaInput.value.trim();
+  // 아젠다를 적었으면 그 아젠다에서 쓰던 실 이름을 먼저 보여줌
+  const inAgenda = todos.filter(t => !agenda || t.agenda === agenda);
+  const depts = [...new Set([...inAgenda, ...todos].map(t => t.dept).filter(Boolean))];
   const teams = [...new Set(todos.filter(t => t.dept === deptInput.value.trim()).map(t => t.team).filter(Boolean))];
+  fillOptions(agendaOptions, agendas);
   fillOptions(deptOptions, depts);
   fillOptions(teamOptions, teams);
 }
@@ -644,8 +828,8 @@ function nextOrder() {
 function addTodo(fields) {
   const now = Date.now();
   return db.collection('todos').doc().set({
-    dept: '', team: '', text: '', done: false, due: '', important: false, notes: '',
-    order: nextOrder(), createdAt: now, createdBy: myId, updatedAt: now, updatedBy: myId,
+    agenda: '', dept: '', team: '', assignee: null, assigneeName: '', text: '', done: false, due: '',
+    important: false, notes: '', order: nextOrder(), createdAt: now, createdBy: myId, updatedAt: now, updatedBy: myId,
     ...fields,
   });
 }
@@ -655,14 +839,16 @@ form.addEventListener('submit', (e) => {
   if (!db || !canWrite) return;
   const text = input.value.trim();
   if (!text) return;
+  const agenda = agendaInput.value.trim();
   const dept = deptInput.value.trim();
   const team = dept ? teamInput.value.trim() : '';
-  addTodo({ dept, team, text, due: dueInput.value }).catch(onWriteError);
+  addTodo({ agenda, dept, team, text, due: dueInput.value, ...currentNewAssignee() }).catch(onWriteError);
   input.value = '';
   dueInput.value = '';
 });
 
 deptInput.addEventListener('input', syncTeamInput);
+agendaInput.addEventListener('input', updateSuggestions);
 
 filterButtons.forEach(button => {
   button.addEventListener('click', () => {
@@ -711,9 +897,10 @@ function updateDetail() {
     if (openId && detail.open && loaded) detail.close(); // 다른 팀원이 지운 경우
     return;
   }
-  detailPath.textContent = [todo.dept, todo.team].filter(Boolean).join(' › ') || '그룹 없음';
+  detailPath.textContent = [todo.agenda, todo.dept, todo.team].filter(Boolean).join(' › ') || '그룹 없음';
   detailTitle.textContent = todo.text;
   detailDone.checked = todo.done;
+  if (document.activeElement !== detailAssignee) detailAssignee.value = assigneeLabel(todo);
 
   // 내가 입력 중일 때는 덮어쓰지 않음. 그 외에는 팀원이 고친 내용을 바로 반영
   if (document.activeElement !== detailNotes && !notesTimer) detailNotes.value = todo.notes;
@@ -731,7 +918,7 @@ function updateDetail() {
   }
 
   const items = attachmentsOf(todo.id);
-  loadNames([todo.updatedBy, ...items.map(a => a.by)]);
+  loadNames([todo.updatedBy, todo.assignee, ...items.map(a => a.by)]);
 
   detailFiles.innerHTML = '';
   for (const att of items) {
@@ -1055,7 +1242,7 @@ importButton.addEventListener('click', async () => {
   let order = nextOrder();
   for (const t of items) {
     await addTodo({
-      dept: t.dept || '', team: t.team || '', text: String(t.text).slice(0, 200), done: !!t.done,
+      agenda: t.agenda || '', dept: t.dept || '', team: t.team || '', text: String(t.text).slice(0, 200), done: !!t.done,
       due: t.due || '', important: !!t.important, notes: t.notes || '', order,
     }).catch(onWriteError);
     order += 1000;

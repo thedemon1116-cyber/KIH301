@@ -11,6 +11,8 @@
     </div>
 
     <form id="todo-form" class="todo-form write-only">
+      <input id="agenda-input" class="agenda-input" type="text" list="agenda-options" placeholder="C레벨 아젠다명 (선택)" autocomplete="off" maxlength="60" title="최상위 그룹 (선택)">
+      <datalist id="agenda-options"></datalist>
       <div class="group-inputs">
         <input id="dept-input" type="text" list="dept-options" placeholder="실 (예: 회원관리)" autocomplete="off" maxlength="40" title="상위 그룹 (선택)">
         <span class="sep" aria-hidden="true">›</span>
@@ -19,6 +21,7 @@
       <datalist id="dept-options"></datalist>
       <datalist id="team-options"></datalist>
       <input id="todo-input" type="text" placeholder="할 일을 입력하세요" autocomplete="off" maxlength="200" required>
+      <input id="assignee-input" class="assignee-input" type="text" placeholder="담당자 (선택)" autocomplete="off" maxlength="40">
       <input id="due-input" type="date" title="마감일 (선택)">
       <button type="submit">추가</button>
     </form>
@@ -29,6 +32,7 @@
       <button type="button" data-filter="doing">진행 중</button>
       <button type="button" data-filter="done">완료</button>
       <button type="button" data-filter="important">★ 중요</button>
+      <button type="button" data-filter="mine">👤 내 할 일</button>
     </div>
 
     <div id="todo-list" class="todo-list"></div>
@@ -39,7 +43,7 @@
       <button type="button" id="clear-done">완료 항목 지우기</button>
     </footer>
 
-    <p class="hint">팀원 모두가 같은 목록을 보고, 고친 내용은 바로 서로의 화면에 반영돼요.<br>작성하기: 상세 내용·자료 올리기 · 더블클릭: 제목 수정 · ⠿ 끌기: 순서 변경 · 그룹 제목 클릭: 접기/펼치기</p>
+    <p class="hint">팀원 모두가 같은 목록을 보고, 고친 내용은 바로 서로의 화면에 반영돼요.<br>작성하기: 상세 내용·자료 올리기 · 더블클릭: 제목 수정 · ⠿ 끌기: 순서 변경 · 그룹 제목 클릭: 접기/펼치기<br>구조: C레벨 아젠다 › 실 › 팀 › 할 일 (모두 선택 사항, 팀은 실이 있어야 입력 가능)</p>
   </main>
 
   <dialog id="detail" class="detail" aria-labelledby="detail-title">
@@ -51,6 +55,11 @@
         </div>
         <button type="button" id="detail-close" class="detail-close" title="닫기">×</button>
       </header>
+
+      <div class="detail-assignee-row">
+        <label for="detail-assignee" class="section-label">담당자</label>
+        <input id="detail-assignee" type="text" placeholder="이름으로 찾기" autocomplete="off" maxlength="40">
+      </div>
 
       <div class="detail-state">
         <span id="detail-status" class="status"></span>

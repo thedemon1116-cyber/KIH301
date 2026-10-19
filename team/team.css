@@ -80,3 +80,80 @@ a.file-name:hover { text-decoration: underline; }
 @media (max-width: 480px) {
   .file-info { display: inline; font-size: 0.7rem; white-space: normal; text-align: right; }
 }
+
+/* C레벨 아젠다 (최상위 그룹) */
+.todo-form .agenda-input { flex-basis: 100%; font-weight: 600; }
+
+.group.lv0 { margin-top: 14px; }
+.group.lv0 > .group-head { border: 1px solid var(--primary); border-radius: 10px; }
+.group.lv0 > .group-head .group-toggle { font-weight: 800; font-size: 1.05rem; }
+.group.lv0 > .group-head .tag { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+.group.lv0 > .group-body { padding-left: 10px; }
+.group.lv0 .group.lv1 { margin-top: 8px; }
+
+/* 담당자 */
+.todo-list .assignee {
+  font-size: 0.75rem;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.todo-list .assignee.me { border-color: var(--primary); color: var(--primary); font-weight: 600; }
+
+.picker { position: relative; display: flex; flex: 1 1 140px; min-width: 0; }
+.picker > input { flex: 1; min-width: 0; }
+
+.picker-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.picker-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.picker-menu button:hover { background: var(--group-bg); }
+.picker-menu button.extra { color: var(--muted); }
+
+.detail-assignee-row { display: flex; align-items: center; gap: 10px; }
+.detail-assignee-row .picker { flex: 1; }
+
+.detail-assignee-row input {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+}
+
+.detail-assignee-row input:focus { border-color: var(--primary); }
+
+@media (max-width: 480px) {
+  .todo-form .picker { flex-basis: 100%; }
+}
+
+/* 할 일 입력칸은 항상 한 줄 전체 */
+.todo-form #todo-input { flex-basis: 100%; }
